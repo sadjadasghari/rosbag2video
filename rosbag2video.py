@@ -113,7 +113,7 @@ class RosVideoWriter():
         return opt_files
 
 
-    # filter messages using type or only the opic we whant from the 'topic' argument
+    # filter messages using type or only the opic we want from the 'topic' argument
     def filter_image_msgs(self, topic, datatype, md5sum, msg_def, header):
         if(datatype=="sensor_msgs/CompressedImage"):
             if (self.opt_topic != "" and self.opt_topic == topic) or self.opt_topic == "":
@@ -134,7 +134,8 @@ class RosVideoWriter():
                 print(topic,' with datatype:', str(datatype))
                 print()
                 return True;
-
+        else:
+            print("in filter_image_msgs, datatype= ", datatype)
         return False;
 
 
@@ -202,11 +203,14 @@ class RosVideoWriter():
         #Go through the bag file
         bag = rosbag.Bag(filename)
         if self.opt_verbose :
-            print("Bag opened.")
+            print("Bag opened with number of topics: ", len([topic for topic, msg, t in bag.read_messages(connection_filter=self.filter_image_msgs, start_time=self.opt_start, end_time=self.opt_end)]))
         # loop over all topics
+        
         for topic, msg, t in bag.read_messages(connection_filter=self.filter_image_msgs, start_time=self.opt_start, end_time=self.opt_end):
+            # print('!!!msg.format and msg.encoding are: ', msg.format, msg.encoding) 
             try:
                 if msg.format.find("jpeg")!=-1 :
+                    # print('!!!msg.format was jpeg!!!!, ', msg.format)
                     if msg.format.find("8")!=-1 and (msg.format.find("rgb")!=-1 or msg.format.find("bgr")!=-1 or msg.format.find("bgra")!=-1 ):
                         if self.opt_display_images:
                             np_arr = np.fromstring(msg.data, np.uint8)
@@ -224,10 +228,32 @@ class RosVideoWriter():
                         self.write_output_video( msg, topic, t, MJPEG_VIDEO )
                     else:
                         print('unsupported jpeg format:', msg.format, '.', topic)
-
+                elif msg.format.find("jpg")!=-1 :
+                    # print('!!!msg.format was jpg!!!')
+                    if msg.format.find("8")!=-1 and (msg.format.find("rgb")!=-1 or msg.format.find("bgr")!=-1 or msg.format.find("bgra")!=-1 ):
+                        if self.opt_display_images:
+                            np_arr = np.fromstring(msg.data, np.uint8)
+                            cv_image = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+                        self.write_output_video( msg, topic, t, MJPEG_VIDEO )
+                    elif msg.format.find("mono8")!=-1 :
+                        if self.opt_display_images:
+                            np_arr = np.fromstring(msg.data, np.uint8)
+                            cv_image = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+                        self.write_output_video( msg, topic, t, MJPEG_VIDEO )
+                    elif msg.format.find("16UC1")!=-1 :
+                        if self.opt_display_images:
+                            np_arr = np.fromstring(msg.data, np.uint16)
+                            cv_image = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+                        self.write_output_video( msg, topic, t, MJPEG_VIDEO )
+                    elif msg.format.find("jpg") != -1:
+                        self.write_output_video( msg, topic, t, MJPEG_VIDEO)  # RAWIMAGE_VIDEO, pix_fmt )
+                    else:
+                        print('unsupported jpg format:', msg.format, '.', topic)
+                    #print('!!! msg.format is: ', msg.format)
             # has no attribute 'format'
             except AttributeError:
                 try:
+                        # print('!!! pix format encoding !!!, ', msg.encoding)
                         pix_fmt=None
                         if msg.encoding.find("mono8")!=-1 or msg.encoding.find("8UC1")!=-1:
                             pix_fmt = "gray"
@@ -258,11 +284,11 @@ class RosVideoWriter():
                         elif msg.encoding.find("16UC1")!=-1 :
                             pix_fmt = "gray16le"
                         elif msg.encoding.find('yuv422')!=-1 :
-                            np_arr = np.fromstring(msg.data, np.uint8)
-                            mat = np.reshape(np_arr, (480,640,2))
-                            cv_image = cv2.cvtColor(mat, cv2.COLOR_YUV2BGR_UYVY)
-                            msg.data = cv_image.tostring()
-                            pix_fmt = 'bgr24'
+                             np_arr = np.fromstring(msg.data, np.uint8)
+                             mat = np.reshape(np_arr, (480,640,2))
+                             cv_image = cv2.cvtColor(mat, cv2.COLOR_YUV2BGR_UYVY)
+                             msg.data = cv_image.tostring()
+                             pix_fmt = 'bgr24'
                         else:
                             print('unsupported encoding:', msg.encoding, topic)
                             #exit(1)
@@ -282,6 +308,7 @@ class RosVideoWriter():
                     exit(1)
         if self.p_avconv == {}:
             print("No image topics found in bag:", filename)
+
         bag.close()
 
 
